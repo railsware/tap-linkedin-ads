@@ -30,8 +30,7 @@ def get_streams_to_sync(selected_streams):
     """
     streams_to_sync = []
 
-    # Loop thru all selected streams
-    for stream_name in selected_streams:
+    def add_stream(stream_name):
         stream_obj = STREAMS[stream_name]
         # If the stream has a parent_stream, then it is a child stream
         parent_stream = hasattr(stream_obj, 'parent') and stream_obj.parent
@@ -42,7 +41,11 @@ def get_streams_to_sync(selected_streams):
         else:
             # Append un-selected parent streams of selected children
             if parent_stream not in selected_streams and parent_stream not in streams_to_sync:
-                streams_to_sync.append(parent_stream)
+                add_stream(parent_stream)
+
+    # Loop thru all selected streams
+    for stream_name in selected_streams:
+        add_stream(stream_name)
 
     return streams_to_sync
 
