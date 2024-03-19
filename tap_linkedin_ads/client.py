@@ -349,7 +349,8 @@ class LinkedinClient: # pylint: disable=too-many-instance-attributes
             kwargs['headers'] = {}
         kwargs['headers']['Authorization'] = 'Bearer {}'.format(self.__access_token)
         kwargs['headers']['Accept'] = 'application/json'
-        kwargs['headers']['LinkedIn-Version'] = LINKEDIN_VERSION
+        if 'LinkedIn-Version' not in kwargs['headers']:
+            kwargs['headers']['LinkedIn-Version'] = LINKEDIN_VERSION
         kwargs['headers']['Cache-Control'] = "no-cache"
 
         if self.__user_agent:
