@@ -145,7 +145,7 @@ class LinkedInAds:
     properties:
 
         tap_stream_id        : stream name for the endpoint
-        replicaiton_method   : replication method of given streams. Possible values: FULL_TABLE, INCREMENTAL
+        replication_method   : replication method of given streams. Possible values: FULL_TABLE, INCREMENTAL
         replicaion_keys      : Replications keys for an incremental stream
         key_properties       : Primary keys for a given stream
         path                 : API endpoint relative path, when added to the base URL, creates the full path
@@ -174,6 +174,8 @@ class LinkedInAds:
     count = None
     params = {}
     headers = {}
+    accounts = []
+
     def write_schema(self, catalog):
         """
         Write the schema for the selected stream.

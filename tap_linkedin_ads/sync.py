@@ -103,8 +103,9 @@ def sync(client, config, catalog, state):
 
         # Add appropriate account_filter query parameters based on account_filter type
         account_filter = stream_obj.account_filter
+        account_list = config.get('accounts', "").replace(" ", "").split(",")
+        stream_obj.accounts = account_list
         if config.get("accounts") and account_filter is not None:
-            account_list = config['accounts'].replace(" ", "").split(",")
             params = stream_obj.params
             for idx, account in enumerate(account_list):
                 if account_filter == 'search_id_values_param':
