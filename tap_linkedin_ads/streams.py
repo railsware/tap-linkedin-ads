@@ -578,9 +578,9 @@ class VideoAds(LinkedInAds):
     path = "adDirectSponsoredContents"
     data_key = "elements"
     parent = "accounts"
-    params = {
-        "q": "account"
-    }
+    params = {"q": "account"}
+    headers = {"LinkedIn-Version": "202307"}
+
 
 class AccountUsers(LinkedInAds):
     """
