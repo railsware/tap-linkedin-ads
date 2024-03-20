@@ -145,7 +145,7 @@ class LinkedInAds:
     properties:
 
         tap_stream_id        : stream name for the endpoint
-        replicaiton_method   : replication method of given streams. Possible values: FULL_TABLE, INCREMENTAL
+        replication_method   : replication method of given streams. Possible values: FULL_TABLE, INCREMENTAL
         replicaion_keys      : Replications keys for an incremental stream
         key_properties       : Primary keys for a given stream
         path                 : API endpoint relative path, when added to the base URL, creates the full path
@@ -174,6 +174,8 @@ class LinkedInAds:
     count = None
     params = {}
     headers = {}
+    accounts = []
+
     def write_schema(self, catalog):
         """
         Write the schema for the selected stream.
@@ -280,17 +282,15 @@ class LinkedInAds:
         child_max_bookmarks = {}
         children = self.children
         # Loop through all children
-        for child_stream_name in children:
-
-            if child_stream_name in selected_streams:
-                child_obj = STREAMS[child_stream_name]()
-                # Write schema for each child stream
-                child_obj.write_schema(catalog)
-                child_bookmark_field = child_obj.replication_keys
-                if child_bookmark_field:
-                    child_last_datetime = child_obj.get_bookmark(state, start_date)
-                    # Add the last bookmark of child stream in the `child_max_bookmarks` map
-                    child_max_bookmarks[child_stream_name] = child_last_datetime
+        for child_stream_name in self.iter_child_streams(selected_streams):
+            child_obj = STREAMS[child_stream_name]()
+            # Write schema for each child stream
+            child_obj.write_schema(catalog)
+            child_bookmark_field = child_obj.replication_keys
+            if child_bookmark_field:
+                child_last_datetime = child_obj.get_bookmark(state, start_date)
+                # Add the last bookmark of child stream in the `child_max_bookmarks` map
+                child_max_bookmarks[child_stream_name] = child_last_datetime
 
         # Pagination reference:
         # https://docs.microsoft.com/en-us/linkedin/shared/api-guide/concepts/pagination?context=linkedin/marketing/context
@@ -349,74 +349,79 @@ class LinkedInAds:
                 total_records = total_records + record_count
 
             # Loop thru parent batch records for each children objects
-            for child_stream_name in children:
-                if child_stream_name in selected_streams:
-                    # For each parent record
-                    child_obj = STREAMS[child_stream_name]()
+            for child_stream_name in self.iter_child_streams(selected_streams):
+                # For each parent record
+                child_obj = STREAMS[child_stream_name]()
+                for record in pre_singer_transformed_data:
+                    parent_id = record.get(child_obj.foreign_key)
 
-                    for record in pre_singer_transformed_data:
-
-                        parent_id = record.get(child_obj.foreign_key)
-
-                        child_stream_params = child_obj.params
-                        # Add children filter params based on parent IDs
-                        if self.tap_stream_id == 'accounts':
-                            account = 'urn:li:sponsoredAccount:{}'.format(parent_id)
+                    child_stream_params = child_obj.params
+                    # Add children filter params based on parent IDs
+                    if self.tap_stream_id == 'accounts':
+                        account = 'urn:li:sponsoredAccount:{}'.format(parent_id)
+                        if 'reference_organization_id' in record:
                             owner_id = record.get('reference_organization_id', None)
                             owner = 'urn:li:organization:{}'.format(owner_id)
-                            if child_stream_name == 'video_ads' and owner_id is not None:
-                                child_stream_params['account'] = account
-                                child_stream_params['owner'] = owner
-                            else:
-                                LOGGER.warning("Skipping video_ads call for %s account as reference_organization_id is not found.", account)
-                                continue
-                        elif self.tap_stream_id == 'campaigns':
-                            campaign = 'urn:li:sponsoredCampaign:{}'.format(parent_id)
-                            if child_stream_name == 'creatives':
-                                # The value of the campaigns in the query params should be passed in the encoded format.
-                                # Ref - https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads/account-structure/create-and-manage-creatives?view=li-lms-2023-01&tabs=http#sample-request-3
-                                child_stream_params['campaigns'] = 'List(urn%3Ali%3AsponsoredCampaign%3A{})'.format(parent_id)
-                            elif child_stream_name in ('ad_analytics_by_campaign', 'ad_analytics_by_creative'):
-                                child_stream_params['campaigns[0]'] = campaign
-
-                        # Update params for the child stream
-                        child_obj.params = child_stream_params
-                        LOGGER.info('Syncing: %s, parent_stream: %s, parent_id: %s',
-                                    child_stream_name,
-                                    self.tap_stream_id,
-                                    parent_id)
-
-                        # Call sync method for the child stream
-                        if child_stream_name in {'ad_analytics_by_campaign', 'ad_analytics_by_creative'}:
-                            child_total_records, child_batch_bookmark_value = child_obj.sync_ad_analytics(
-                                client=client,
-                                catalog=catalog,
-                                last_datetime=child_obj.get_bookmark(state, start_date),
-                                date_window_size=date_window_size,
-                                parent_id=parent_id)
                         else:
-                            child_total_records, child_batch_bookmark_value = child_obj.sync_endpoint(
-                                client=client,
-                                catalog=catalog,
-                                state=state,
-                                page_size=page_size,
-                                start_date=start_date,
-                                selected_streams=selected_streams,
-                                date_window_size=date_window_size,
-                                parent_id=parent_id)
+                            owner_id = record.get('reference_organization_brand_id', None)
+                            owner = 'urn:li:organizationBrand:{}'.format(owner_id)
 
-                        child_batch_bookmark_dttm = strptime_to_utc(child_batch_bookmark_value)
-                        child_max_bookmark = child_max_bookmarks.get(child_stream_name)
-                        child_max_bookmark_dttm = strptime_to_utc(child_max_bookmark)
-                        if child_batch_bookmark_dttm > child_max_bookmark_dttm:
-                            # Update bookmark for child stream.
-                            child_max_bookmarks[child_stream_name] = strftime(child_batch_bookmark_dttm)
+                        if child_stream_name == 'video_ads' and owner_id is not None:
+                            child_stream_params['account'] = account
+                            child_stream_params['owner'] = owner
+                        elif child_stream_name in ('campaign_groups', 'campaigns'):
+                            child_obj.path = child_obj.path_template.format(parent_id)
+                        else:
+                            LOGGER.warning("Skipping video_ads call for %s account as reference_organization_id is not found.", account)
+                            continue
+                    elif self.tap_stream_id == 'campaigns':
+                        campaign = 'urn:li:sponsoredCampaign:{}'.format(parent_id)
+                        if child_stream_name == 'creatives':
+                            # The value of the campaigns in the query params should be passed in the encoded format.
+                            # Ref - https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads/account-structure/create-and-manage-creatives?view=li-lms-2023-01&tabs=http#sample-request-3
+                            child_stream_params['campaigns'] = 'List(urn%3Ali%3AsponsoredCampaign%3A{})'.format(parent_id)
+                            child_obj.path = child_obj.path_template.format(record.get('account_id', ''))
+                        elif child_stream_name in ('ad_analytics_by_campaign', 'ad_analytics_by_creative'):
+                            child_stream_params['campaigns[0]'] = campaign
 
-                        LOGGER.info('Synced: %s, parent_id: %s, total_records: %s',
-                                    child_stream_name,
-                                    parent_id,
-                                    child_total_records)
-                        LOGGER.info('FINISHED Syncing: %s', child_stream_name)
+                    # Update params for the child stream
+                    child_obj.params = child_stream_params
+                    LOGGER.info('Syncing: %s, parent_stream: %s, parent_id: %s',
+                                child_stream_name,
+                                self.tap_stream_id,
+                                parent_id)
+
+                    # Call sync method for the child stream
+                    if child_stream_name in {'ad_analytics_by_campaign', 'ad_analytics_by_creative'}:
+                        child_total_records, child_batch_bookmark_value = child_obj.sync_ad_analytics(
+                            client=client,
+                            catalog=catalog,
+                            last_datetime=child_obj.get_bookmark(state, start_date),
+                            date_window_size=date_window_size,
+                            parent_id=parent_id)
+                    else:
+                        child_total_records, child_batch_bookmark_value = child_obj.sync_endpoint(
+                            client=client,
+                            catalog=catalog,
+                            state=state,
+                            page_size=page_size,
+                            start_date=start_date,
+                            selected_streams=selected_streams,
+                            date_window_size=date_window_size,
+                            parent_id=parent_id)
+
+                    child_batch_bookmark_dttm = strptime_to_utc(child_batch_bookmark_value)
+                    child_max_bookmark = child_max_bookmarks.get(child_stream_name)
+                    child_max_bookmark_dttm = strptime_to_utc(child_max_bookmark)
+                    if child_batch_bookmark_dttm > child_max_bookmark_dttm:
+                        # Update bookmark for child stream.
+                        child_max_bookmarks[child_stream_name] = strftime(child_batch_bookmark_dttm)
+
+                    LOGGER.info('Synced: %s, parent_id: %s, total_records: %s',
+                                child_stream_name,
+                                parent_id,
+                                child_total_records)
+                    LOGGER.info('FINISHED Syncing: %s', child_stream_name)
 
             # Pagination: Get next_url
             next_url = get_next_url(data)
@@ -548,6 +553,14 @@ class LinkedInAds:
 
         return total_records, max_bookmark_value
 
+    def iter_child_streams(self, selected_streams):
+        selected = set(selected_streams)
+        for child_stream_name in self.children:
+            child_obj = STREAMS[child_stream_name]()
+            if child_stream_name in selected_streams or not selected.isdisjoint(child_obj.children):
+                yield child_stream_name
+
+
 class Accounts(LinkedInAds):
     """
     https://docs.microsoft.com/en-us/linkedin/marketing/integrations/ads/account-structure/create-and-manage-accounts#search-for-accounts
@@ -559,17 +572,20 @@ class Accounts(LinkedInAds):
     account_filter = "search_id_values_param"
     path = "adAccounts"
     data_key = "elements"
-    children = ["video_ads"]
+    children = [
+        "campaign_groups",
+        "campaigns",
+        "video_ads",
+        ]
     params = {
-        "q": "search",
-        "sort.field": "ID",
-        "sort.order": "ASCENDING"
+        "q": "search"
     }
 
 class VideoAds(LinkedInAds):
     """
     https://docs.microsoft.com/en-us/linkedin/marketing/integrations/ads/advertising-targeting/create-and-manage-video#finders
     """
+
     tap_stream_id = "video_ads"
     replication_keys = ["last_modified_time"]
     replication_method = "INCREMENTAL"
@@ -578,9 +594,9 @@ class VideoAds(LinkedInAds):
     path = "adDirectSponsoredContents"
     data_key = "elements"
     parent = "accounts"
-    params = {
-        "q": "account"
-    }
+    params = {"q": "account"}
+    headers = {"LinkedIn-Version": "202307"}
+
 
 class AccountUsers(LinkedInAds):
     """
@@ -601,36 +617,51 @@ class CampaignGroups(LinkedInAds):
     """
     https://docs.microsoft.com/en-us/linkedin/marketing/integrations/ads/account-structure/create-and-manage-campaign-groups#search-for-campaign-groups
     """
+
     tap_stream_id = "campaign_groups"
     replication_method = "INCREMENTAL"
     replication_keys = ["last_modified_time"]
     key_properties = ["id"]
-    account_filter = "search_account_values_param"
-    path = "adCampaignGroups"
+    path_template = "adAccounts/{}/adCampaignGroups"
     data_key = "elements"
+    parent = "accounts"
+    foreign_key = "id"
     params = {
         "q": "search",
-        "sort.field": "ID",
-        "sort.order": "ASCENDING"
+        "sort": "(field:ID,order:ASCENDING)",
+        "search": "()",
+    }
+    headers = {
+        "LinkedIn-Version": "202311",
+        "X-Restli-Protocol-Version": "2.0.0",
+        "X-RestLi-Method": "FINDER",
     }
 
 class Campaigns(LinkedInAds):
     """
     https://docs.microsoft.com/en-us/linkedin/marketing/integrations/ads/account-structure/create-and-manage-campaigns#search-for-campaigns
     """
+
     tap_stream_id = "campaigns"
     replication_method = "INCREMENTAL"
     replication_keys = ["last_modified_time"]
     key_properties = ["id"]
-    account_filter = "search_account_values_param"
-    path = "adCampaigns"
+    path_template = "adAccounts/{}/adCampaigns"
+    parent = "accounts"
+    foreign_key = "id"
     data_key = "elements"
-    children = ["ad_analytics_by_campaign", "creatives", "ad_analytics_by_creative"]
+    children = ["ad_analytics_by_campaign", "ad_analytics_by_creative", 'creatives']
     params = {
         "q": "search",
-        "sort.field": "ID",
-        "sort.order": "ASCENDING"
+        "sort": "(field:ID,order:ASCENDING)",
+        "search": "()",
     }
+    headers = {
+        "LinkedIn-Version": "202311",
+        "X-Restli-Protocol-Version": "2.0.0",
+        "X-RestLi-Method": "FINDER",
+    }
+
 
 class Creatives(LinkedInAds):
     """
@@ -640,7 +671,7 @@ class Creatives(LinkedInAds):
     replication_method = "INCREMENTAL"
     replication_keys = ["last_modified_at"]
     key_properties = ["id"]
-    path = "creatives"
+    path_template = "adAccounts/{}/creatives"
     foreign_key = "id"
     data_key = "elements"
     parent = "campaigns"
@@ -653,8 +684,11 @@ class Creatives(LinkedInAds):
     }
     # Requires this specific headers for creatives endpoint.
     # Ref - https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads/account-structure/create-and-manage-creatives?view=li-lms-2023-01&tabs=http#search-for-creatives
-    headers = {'X-Restli-Protocol-Version': "2.0.0",
-               "X-RestLi-Method": "FINDER"}
+    headers = {
+        "LinkedIn-Version": "202311",
+        "X-Restli-Protocol-Version": "2.0.0",
+        "X-RestLi-Method": "FINDER",
+    }
 
 class AdAnalyticsByCampaign(LinkedInAds):
     """
