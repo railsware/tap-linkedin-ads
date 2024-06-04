@@ -30,7 +30,8 @@ def get_streams_to_sync(selected_streams):
     """
     streams_to_sync = []
 
-    def add_stream(stream_name):
+    # Loop thru all selected streams
+    for stream_name in selected_streams:
         stream_obj = STREAMS[stream_name]
         # If the stream has a parent_stream, then it is a child stream
         parent_stream = hasattr(stream_obj, 'parent') and stream_obj.parent
@@ -41,11 +42,7 @@ def get_streams_to_sync(selected_streams):
         else:
             # Append un-selected parent streams of selected children
             if parent_stream not in selected_streams and parent_stream not in streams_to_sync:
-                add_stream(parent_stream)
-
-    # Loop thru all selected streams
-    for stream_name in selected_streams:
-        add_stream(stream_name)
+                streams_to_sync.append(parent_stream)
 
     return streams_to_sync
 
@@ -106,22 +103,22 @@ def sync(client, config, catalog, state):
 
         # Add appropriate account_filter query parameters based on account_filter type
         account_filter = stream_obj.account_filter
-        account_list = config.get('accounts', "").replace(" ", "").split(",")
-        stream_obj.accounts = account_list
         if config.get("accounts") and account_filter is not None:
-            params = stream_obj.params
-            for idx, account in enumerate(account_list):
+            account_list = config['accounts'].replace(" ", "").split(",")
+            if len(account_list) > 0:
+                params = stream_obj.params
                 if account_filter == 'search_id_values_param':
-                    params['search.id.values[{}]'.format(idx)] = int(account)
-                elif account_filter == 'search_account_values_param':
-                    params['search.account.values[{}]'.format(idx)] = \
-                        'urn:li:sponsoredAccount:{}'.format(account)
+                    # Convert account IDs to URN format
+                    urn_list = ["urn%3Ali%3AsponsoredAccount%3A{}".format(account_id) for account_id in account_list]
+                    # Create the query parameter string
+                    param_value = "(id:(values:List({})))".format(','.join(urn_list))
+                    params['search'] = param_value
                 elif account_filter == 'accounts_param':
-                    params['accounts[{}]'.format(idx)] = \
-                        'urn:li:sponsoredAccount:{}'.format(account)
-
-            # Update params of specific stream
-            stream_obj.params = params
+                    for idx, account in enumerate(account_list):
+                        params['accounts[{}]'.format(idx)] = \
+                            'urn:li:sponsoredAccount:{}'.format(account)
+                # Update params of specific stream
+                stream_obj.params = params
 
         LOGGER.info('START Syncing: %s', stream_name)
         update_currently_syncing(state, stream_name)
@@ -132,11 +129,11 @@ def sync(client, config, catalog, state):
 
         total_records, max_bookmark_value = stream_obj.sync_endpoint(
             client=client, catalog=catalog,
-            state=state,
-            page_size=page_size,
+            state=state, page_size=page_size,
             start_date=start_date,
             selected_streams=selected_streams,
-            date_window_size=date_window_size)
+            date_window_size=date_window_size,
+            account_list=account_list)
 
         # Write parent stream's bookmarks
         if stream_obj.replication_keys and stream_name in selected_streams:
