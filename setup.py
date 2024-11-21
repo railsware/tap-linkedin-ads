@@ -9,9 +9,9 @@ setup(name='tap-linkedin-ads',
       classifiers=['Programming Language :: Python :: 3 :: Only'],
       py_modules=['tap_linkedin_ads'],
       install_requires=[
-          'backoff==1.8.0',
+          'singer-python@git+https://github.com/railsware/singer-python/@ea0489dcb73fcb19195eea50eeff9a13d6914e9a',
           'requests>=2.31.0',
-          'singer-python==5.12.1'
+          'backoff~=2.2.1',
       ],
       extras_require={
         'dev': [
