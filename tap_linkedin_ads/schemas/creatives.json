@@ -132,6 +132,12 @@
           "string"
         ]
       }
+    },
+    "name": {
+      "type": [
+        "null",
+        "string"
+      ]
     }
   }
 }
