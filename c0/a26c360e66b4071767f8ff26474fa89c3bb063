@@ -1,0 +1,19 @@
+tap_linkedin_ads/schemas/creatives.json
+  s_1f4c14862de8e6::t_a0118a73d7b909 79-90
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "c0a26c360e66b4071767f8ff26474fa89c3bb063",
+  "prompts": {},
+  "sessions": {
+    "s_1f4c14862de8e6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1886bfa3-b172-4b7a-ae2c-bb0aea99e144",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Kyrylo Mykhailets <rado.ua@gmail.com>"
+    }
+  }
+}
