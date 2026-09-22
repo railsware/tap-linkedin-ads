@@ -11,6 +11,7 @@ LOGGER = singer.get_logger()
 BASE_URL = 'https://api.linkedin.com/rest'
 LINKEDIN_TOKEN_URI = 'https://www.linkedin.com/oauth/v2/accessToken'
 INTROSPECTION_URI = 'https://www.linkedin.com/oauth/v2/introspectToken'
+# Default LinkedIn-Version header; override per run with the `api_version` config key.
 LINKEDIN_VERSION = '202510'
 
 # set default timeout of 300 seconds
@@ -129,8 +130,10 @@ class LinkedinClient: # pylint: disable=too-many-instance-attributes
                  access_token,
                  config_path,
                  request_timeout=REQUEST_TIMEOUT,
-                 user_agent=None):
+                 user_agent=None,
+                 api_version=None):
         self.__client_id = client_id
+        self.__api_version = api_version or LINKEDIN_VERSION
         self.__client_secret = client_secret
         self.__refresh_token = refresh_token
         self.__config_path = config_path
@@ -150,6 +153,10 @@ class LinkedinClient: # pylint: disable=too-many-instance-attributes
     @property
     def access_token(self):
         return self.__access_token
+
+    @property
+    def api_version(self):
+        return self.__api_version
 
     # during 'Timeout' error there is also possibility of 'ConnectionError',
     # hence added backoff for 'ConnectionError' too.
@@ -294,7 +301,7 @@ class LinkedinClient: # pylint: disable=too-many-instance-attributes
             headers['User-Agent'] = self.__user_agent
         headers['Authorization'] = 'Bearer {}'.format(self.__access_token)
         headers['Accept'] = 'application/json'
-        headers['LinkedIn-Version'] = LINKEDIN_VERSION
+        headers['LinkedIn-Version'] = self.__api_version
 
         if config.get('accounts'):
             account_list = config['accounts'].replace(" ", "").split(",")
@@ -349,7 +356,7 @@ class LinkedinClient: # pylint: disable=too-many-instance-attributes
             kwargs['headers'] = {}
         kwargs['headers']['Authorization'] = 'Bearer {}'.format(self.__access_token)
         kwargs['headers']['Accept'] = 'application/json'
-        kwargs['headers']['LinkedIn-Version'] = LINKEDIN_VERSION
+        kwargs['headers']['LinkedIn-Version'] = self.__api_version
         kwargs['headers']['Cache-Control'] = "no-cache"
 
         if self.__user_agent:

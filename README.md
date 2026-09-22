@@ -172,7 +172,8 @@ To generate the **access_token**:
   "user_agent": "tap-linkedin-ads <api_user_email@your_company.com>",
   "access_token": "YOUR_ACCESS_TOKEN",
   "accounts": null,
-  "request_timeout": 300
+  "request_timeout": 300,
+  "api_version": "202510"
 }
 ```
 
@@ -209,7 +210,8 @@ To generate the **access_token**:
         "user_agent": "tap-linkedin-ads <api_user_email@your_company.com>",
         "access_token": "YOUR_ACCESS_TOKEN",
         "accounts": "id1, id2, id3",
-        "request_timeout": 300
+        "request_timeout": 300,
+        "api_version": "202510"
     }
     ```
     

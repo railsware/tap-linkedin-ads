@@ -113,3 +113,28 @@ class TestLinkedInClient(unittest.TestCase):
         client.fetch_and_set_access_token()
         actual = client.access_token
         self.assertEqual(expected_access_token, actual)
+
+
+class TestLinkedInClientApiVersion(unittest.TestCase):
+
+    def test_default_api_version(self):
+        client = _client.LinkedinClient('client_id', 'client_secret', 'refresh_token', 'access_token', 'config_path')
+        self.assertEqual(client.api_version, _client.LINKEDIN_VERSION)
+
+    def test_api_version_from_config(self):
+        client = _client.LinkedinClient('client_id', 'client_secret', 'refresh_token', 'access_token', 'config_path',
+                                        api_version='202609')
+        self.assertEqual(client.api_version, '202609')
+
+    @mock.patch("requests.Session.request")
+    def test_request_sends_configured_version_header(self, mocked_request):
+        mocked_response = mock.Mock(status_code=200)
+        mocked_response.json.return_value = {}
+        mocked_request.return_value = mocked_response
+        client = _client.LinkedinClient('client_id', 'client_secret', 'refresh_token', 'access_token', 'config_path',
+                                        api_version='202609')
+
+        client.request('GET', path='adAccounts?q=search')
+
+        headers = mocked_request.call_args[1]['headers']
+        self.assertEqual(headers['LinkedIn-Version'], '202609')
