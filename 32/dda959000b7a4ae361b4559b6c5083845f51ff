@@ -1,0 +1,27 @@
+README.md
+  s_8ae06fed38b74e::t_450d2b81ccc5b9 175-176,213-214
+config.json.example
+  s_8ae06fed38b74e::t_b1daf32964d3f2 8-9
+tap_linkedin_ads/__init__.py
+  s_8ae06fed38b74e::t_8fc07bdad01492 41-42
+tap_linkedin_ads/client.py
+  s_8ae06fed38b74e::t_d8e2644c1196fc 14,133-134,136,157-160,304,359
+tests/unittests/test_client.py
+  s_8ae06fed38b74e::t_3aca361c9ad2e7 116-140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "32dda959000b7a4ae361b4559b6c5083845f51ff",
+  "prompts": {},
+  "sessions": {
+    "s_8ae06fed38b74e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb2b52e7-df87-4dc6-aec3-2f28ba002e7f",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Andrii Porokhnavets <andrii.porokhnavets@railsware.com>"
+    }
+  }
+}
