@@ -38,7 +38,8 @@ def main():
                         parsed_args.config.get('access_token'),
                         parsed_args.config_path,
                         REQUEST_TIMEOUT,
-                        parsed_args.config['user_agent']
+                        parsed_args.config['user_agent'],
+                        parsed_args.config.get('api_version')
                         ) as client:
 
         state = {}
